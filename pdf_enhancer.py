@@ -15,7 +15,7 @@ from tqdm import tqdm
 import io
 import base64
 
-DEFAULT_API_KEY = os.getenv('GEMINI_API_KEY')
+DEFAULT_API_KEY = ""
 
 class PDFEnhancer:
     def __init__(self, api_key: str, log_dir: str = "logs"):
@@ -338,19 +338,78 @@ class PDFEnhancer:
             <title>Enhanced PDF Text</title>
             <style>
                 body { 
-                    font-family: Arial, sans-serif;
-                    max-width: 1200px;
-                    margin: 0 auto;
+                    margin: 0;
                     padding: 20px;
-                    line-height: 1.6;
+                    font-family: Arial, sans-serif;
                 }
-                .page { margin-bottom: 40px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-                .page-header { background-color: #f5f5f5; padding: 10px; margin-bottom: 15px; border-radius: 3px; }
-                .original-text { white-space: pre-wrap; padding: 15px; background-color: #f9f9f9; border-left: 3px solid #ddd; }
-                .footnotes { white-space: pre-wrap; padding: 15px; background-color: #f5f5f5; border-left: 3px solid #666; font-size: 0.9em; }
-                .summary { padding: 15px; background-color: #f0f7ff; border-left: 3px solid #007bff; }
-                .section-header { font-weight: bold; margin: 10px 0; color: #555; }
-                .warning { color: #856404; background-color: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 3px; }
+                .page { 
+                    display: none;
+                    margin-bottom: 40px;
+                    height: 100vh;
+                }
+                .page.active {
+                    display: flex;
+                }
+                .main-content {
+                    width: 70%;
+                    height: 100vh;
+                    overflow-y: auto;
+                    padding: 20px;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .text-content {
+                    flex: 2;
+                    overflow-y: auto;
+                    padding: 20px;
+                    background: #fff;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                }
+                .footnotes {
+                    flex: 1;
+                    padding: 20px;
+                    background: #f9f9f9;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    font-size: 0.9em;
+                    overflow-y: auto;
+                }
+                .side-content {
+                    width: 30%;
+                    height: 100vh;
+                    overflow-y: auto;
+                    padding: 20px;
+                    background: #f5f5f5;
+                    border-left: 1px solid #ddd;
+                }
+                .navigation {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    display: flex;
+                    gap: 10px;
+                }
+                .nav-button {
+                    padding: 10px 20px;
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                }
+                .page-header {
+                    padding: 10px;
+                    background: #f5f5f5;
+                    margin-bottom: 15px;
+                    border-radius: 3px;
+                }
+                .footnotes-header {
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                    color: #666;
+                }
             </style>
         </head>
         <body>"""
@@ -359,22 +418,60 @@ class PDFEnhancer:
             f.write(html_template)
             
             for page in processed_pages:
-                f.write(f'<div class="page">\n')
-                f.write(f'<div class="page-header">Page {page["page_num"]}</div>\n')
-                
-                f.write('<div class="section-header">Original Text:</div>\n')
-                f.write(f'<div class="original-text">{page["original_text"]}</div>\n')
-                
-                if page.get("footnotes"):
-                    f.write('<div class="section-header">Footnotes:</div>\n')
-                    f.write(f'<div class="footnotes">{page["footnotes"]}</div>\n')
-                
-                f.write('<div class="section-header">Summary:</div>\n')
-                f.write(f'<div class="summary">{page["summary"]}</div>\n')
-                
-                f.write('</div>\n')
+                f.write(f'''
+                    <div class="page" id="page_{page['page_num']}">
+                        <div class="main-content">
+                            <div class="page-header">Page {page["page_num"]}</div>
+                            <div class="text-content">{page["original_text"]}</div>
+                            <div class="footnotes">
+                                <div class="footnotes-header">Footnotes</div>
+                                {page.get("footnotes", "")}
+                            </div>
+                        </div>
+                        <div class="side-content">
+                            <div class="summary">{page["summary"]}</div>
+                        </div>
+                    </div>
+                ''')
             
-            f.write('</body></html>')
+            f.write('''
+                <div class="navigation">
+                    <button class="nav-button" onclick="previousPage()">←</button>
+                    <button class="nav-button" onclick="nextPage()">→</button>
+                </div>
+                <script>
+                    let currentPage = 0;
+                    const pages = document.querySelectorAll('.page');
+                    
+                    function showPage(pageNum) {
+                        pages[currentPage].classList.remove('active');
+                        currentPage = pageNum;
+                        pages[currentPage].classList.add('active');
+                    }
+                    
+                    function nextPage() {
+                        if (currentPage < pages.length - 1) {
+                            showPage(currentPage + 1);
+                        }
+                    }
+                    
+                    function previousPage() {
+                        if (currentPage > 0) {
+                            showPage(currentPage - 1);
+                        }
+                    }
+                    
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'ArrowLeft') previousPage();
+                        if (e.key === 'ArrowRight') nextPage();
+                    });
+                    
+                    // Show first page initially
+                    showPage(0);
+                </script>
+            </body>
+            </html>
+            ''')
 
     def _log_content(self, stage: str, content: dict):
         """Log detailed content information"""
@@ -398,6 +495,9 @@ class PDFEnhancer:
                     r"C:\Program Files\poppler\Library\bin",
                     r"C:\Program Files\poppler\bin",
                     r"C:\poppler\bin",
+                    r"C:\Users\munch\poppler\Library\bin",
+                    r"C:\Users\munch\poppler\poppler-24.08.0\Library\bin",
+                    # Add current directory check
                     os.path.join(os.getcwd(), "poppler", "Library", "bin"),
                     os.path.join(os.path.expanduser("~"), "poppler", "Library", "bin")
                 ]
@@ -420,7 +520,8 @@ class PDFEnhancer:
                 error_msg = (
                     "Poppler not found. Please:\n"
                     "1. Download from: https://github.com/oschwartz10612/poppler-windows/releases/\n"
-                    "2. Ensure the bin directory contains pdftoppm.exe"
+                    "2. Extract to C:\\Users\\munch\\poppler\n"
+                    "3. Ensure the bin directory contains pdftoppm.exe"
                 )
                 self.logger.error(error_msg)
                 return False, error_msg

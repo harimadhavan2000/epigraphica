@@ -1,3 +1,7 @@
 logs/
 output.html
 .env
+
+__pycache__/
+*.pyc
+static/output
